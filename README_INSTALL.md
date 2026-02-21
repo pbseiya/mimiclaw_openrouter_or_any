@@ -28,31 +28,33 @@ git clone https://github.com/memovai/mimiclaw.git
 cd mimiclaw
 ```
 
-## 3. Custom Patches for OpenRouter
+## 3. Configuration (.env)
 
-To support OpenRouter's API endpoint, the following files were modified:
+MimiClaw uses a `.env` file for credentials. This file is ignored by Git for security.
 
-### `main/mimi_config.h`
-Added `#ifndef` guards for `MIMI_OPENAI_API_URL`, `MIMI_OPENAI_API_HOST`, and `MIMI_OPENAI_API_PATH`.
+1. Create your `.env` file from the example:
+```bash
+cp .env.example .env
+```
 
-### `main/llm/llm_proxy.c`
-Updated `llm_api_host()` and `llm_api_path()` to use the overridable defines.
-
-## 4. Configuration (.env)
-
-MimiClaw now uses a `.env` file for credentials. 
-
-1. Edit the `.env` file in the root directory:
+2. Edit the `.env` file and fill in your secrets (WiFi, API keys, etc.):
 ```bash
 nano .env
 ```
 
-2. Generate the secrets header:
+3. Generate the secrets header:
 ```bash
 python3 scripts/gen_secrets.py
 ```
 
 This will automatically create/update `main/mimi_secrets.h` with the values from your `.env`.
+
+## 4. Custom Patches for OpenRouter
+
+The original MimiClaw project was patched to support OpenRouter. These changes are already included in this repository:
+- `main/mimi_config.h`: Overridable API host/path.
+- `main/llm/llm_proxy.c`: Dynamic endpoint selection.
+- `main/tools/tool_web_search.c`: Tavily Search integration.
 
 ## 5. Build and Flash (The Easy Way)
 
