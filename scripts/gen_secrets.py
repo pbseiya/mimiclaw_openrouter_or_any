@@ -38,6 +38,9 @@ def main():
         f'#define MIMI_SECRET_MODEL           "{secrets.get("MODEL", "minimax/minimax-m2.5")}"',
         f'#define MIMI_SECRET_MODEL_PROVIDER  "{secrets.get("MODEL_PROVIDER", "openai")}"',
         "",
+        "/* Search */",
+        f'#define MIMI_SECRET_SEARCH_KEY      "{secrets.get("SEARCH_KEY", "")}"',
+        "",
         "/* Overrides */",
     ]
 

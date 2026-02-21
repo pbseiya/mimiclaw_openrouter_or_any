@@ -1,5 +1,7 @@
 # User Profile
 
-- Name: (not set)
-- Language: Chinese / English
-- Timezone: (not set)
+- **Name**: Seiya
+- **Primary Language**: Thai
+- **Secondary Language**: English
+- **Communication Preference**: Concise, technical, and direct.
+- **Role**: Developer and IoT Enthusiast.

@@ -68,43 +68,14 @@ esp_err_t tool_web_search_init(void)
     return ESP_OK;
 }
 
-/* ── URL-encode a query string ────────────────────────────────── */
-
-static size_t url_encode(const char *src, char *dst, size_t dst_size)
-{
-    static const char hex[] = "0123456789ABCDEF";
-    size_t pos = 0;
-
-    for (; *src && pos < dst_size - 3; src++) {
-        unsigned char c = (unsigned char)*src;
-        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-            (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~') {
-            dst[pos++] = c;
-        } else if (c == ' ') {
-            dst[pos++] = '+';
-        } else {
-            dst[pos++] = '%';
-            dst[pos++] = hex[c >> 4];
-            dst[pos++] = hex[c & 0x0F];
-        }
-    }
-    dst[pos] = '\0';
-    return pos;
-}
 
 /* ── Format results as readable text ──────────────────────────── */
 
 static void format_results(cJSON *root, char *output, size_t output_size)
 {
-    cJSON *web = cJSON_GetObjectItem(root, "web");
-    if (!web) {
-        snprintf(output, output_size, "No web results found.");
-        return;
-    }
-
-    cJSON *results = cJSON_GetObjectItem(web, "results");
+    cJSON *results = cJSON_GetObjectItem(root, "results");
     if (!results || !cJSON_IsArray(results) || cJSON_GetArraySize(results) == 0) {
-        snprintf(output, output_size, "No web results found.");
+        snprintf(output, output_size, "No search results found.");
         return;
     }
 
@@ -116,26 +87,25 @@ static void format_results(cJSON *root, char *output, size_t output_size)
 
         cJSON *title = cJSON_GetObjectItem(item, "title");
         cJSON *url = cJSON_GetObjectItem(item, "url");
-        cJSON *desc = cJSON_GetObjectItem(item, "description");
+        cJSON *content = cJSON_GetObjectItem(item, "content");
 
         off += snprintf(output + off, output_size - off,
             "%d. %s\n   %s\n   %s\n\n",
             idx + 1,
             (title && cJSON_IsString(title)) ? title->valuestring : "(no title)",
             (url && cJSON_IsString(url)) ? url->valuestring : "",
-            (desc && cJSON_IsString(desc)) ? desc->valuestring : "");
+            (content && cJSON_IsString(content)) ? content->valuestring : "");
 
         if (off >= output_size - 1) break;
         idx++;
     }
 }
 
-/* ── Direct HTTPS request ─────────────────────────────────────── */
-
-static esp_err_t search_direct(const char *url, search_buf_t *sb)
+static esp_err_t search_direct(const char *payload, search_buf_t *sb)
 {
     esp_http_client_config_t config = {
-        .url = url,
+        .url = "https://api.tavily.com/search",
+        .method = HTTP_METHOD_POST,
         .event_handler = http_event_handler,
         .user_data = sb,
         .timeout_ms = 15000,
@@ -146,8 +116,8 @@ static esp_err_t search_direct(const char *url, search_buf_t *sb)
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client) return ESP_FAIL;
 
-    esp_http_client_set_header(client, "Accept", "application/json");
-    esp_http_client_set_header(client, "X-Subscription-Token", s_search_key);
+    esp_http_client_set_header(client, "Content-Type", "application/json");
+    esp_http_client_set_post_field(client, payload, strlen(payload));
 
     esp_err_t err = esp_http_client_perform(client);
     int status = esp_http_client_get_status_code(client);
@@ -155,29 +125,32 @@ static esp_err_t search_direct(const char *url, search_buf_t *sb)
 
     if (err != ESP_OK) return err;
     if (status != 200) {
-        ESP_LOGE(TAG, "Search API returned %d", status);
+        ESP_LOGE(TAG, "Tavily API returned %d", status);
         return ESP_FAIL;
     }
     return ESP_OK;
 }
 
-/* ── Proxy HTTPS request ──────────────────────────────────────── */
-
-static esp_err_t search_via_proxy(const char *path, search_buf_t *sb)
+static esp_err_t search_via_proxy(const char *payload, search_buf_t *sb)
 {
-    proxy_conn_t *conn = proxy_conn_open("api.search.brave.com", 443, 15000);
+    proxy_conn_t *conn = proxy_conn_open("api.tavily.com", 443, 15000);
     if (!conn) return ESP_ERR_HTTP_CONNECT;
 
-    char header[512];
+    char header[1024];
     int hlen = snprintf(header, sizeof(header),
-        "GET %s HTTP/1.1\r\n"
-        "Host: api.search.brave.com\r\n"
-        "Accept: application/json\r\n"
-        "X-Subscription-Token: %s\r\n"
+        "POST /search HTTP/1.1\r\n"
+        "Host: api.tavily.com\r\n"
+        "Content-Type: application/json\r\n"
+        "Content-Length: %d\r\n"
         "Connection: close\r\n\r\n",
-        path, s_search_key);
+        (int)strlen(payload));
 
     if (proxy_conn_write(conn, header, hlen) < 0) {
+        proxy_conn_close(conn);
+        return ESP_ERR_HTTP_WRITE_DATA;
+    }
+
+    if (proxy_conn_write(conn, payload, strlen(payload)) < 0) {
         proxy_conn_close(conn);
         return ESP_ERR_HTTP_WRITE_DATA;
     }
@@ -216,7 +189,7 @@ static esp_err_t search_via_proxy(const char *path, search_buf_t *sb)
     }
 
     if (status != 200) {
-        ESP_LOGE(TAG, "Search API returned %d via proxy", status);
+        ESP_LOGE(TAG, "Tavily API returned %d via proxy", status);
         return ESP_FAIL;
     }
     return ESP_OK;
@@ -247,19 +220,30 @@ esp_err_t tool_web_search_execute(const char *input_json, char *output, size_t o
 
     ESP_LOGI(TAG, "Searching: %s", query->valuestring);
 
-    /* Build URL */
-    char encoded_query[256];
-    url_encode(query->valuestring, encoded_query, sizeof(encoded_query));
+    /* Build Tavily request body */
+    cJSON *req = cJSON_CreateObject();
+    cJSON_AddStringToObject(req, "api_key", s_search_key);
+    cJSON_AddStringToObject(req, "query", query->valuestring);
+    cJSON_AddNumberToObject(req, "max_results", SEARCH_RESULT_COUNT);
+    cJSON_AddBoolToObject(req, "include_answer", false);
+    cJSON_AddBoolToObject(req, "include_images", false);
+    cJSON_AddBoolToObject(req, "include_raw_content", false);
+    cJSON_AddStringToObject(req, "search_depth", "basic");
+
+    char *payload = cJSON_PrintUnformatted(req);
+    cJSON_Delete(req);
     cJSON_Delete(input);
 
-    char path[384];
-    snprintf(path, sizeof(path),
-             "/res/v1/web/search?q=%s&count=%d", encoded_query, SEARCH_RESULT_COUNT);
+    if (!payload) {
+        snprintf(output, output_size, "Error: Failed to build Tavily request");
+        return ESP_ERR_NO_MEM;
+    }
 
     /* Allocate response buffer from PSRAM */
     search_buf_t sb = {0};
     sb.data = heap_caps_calloc(1, SEARCH_BUF_SIZE, MALLOC_CAP_SPIRAM);
     if (!sb.data) {
+        free(payload);
         snprintf(output, output_size, "Error: Out of memory");
         return ESP_ERR_NO_MEM;
     }
@@ -268,16 +252,15 @@ esp_err_t tool_web_search_execute(const char *input_json, char *output, size_t o
     /* Make HTTP request */
     esp_err_t err;
     if (http_proxy_is_enabled()) {
-        err = search_via_proxy(path, &sb);
+        err = search_via_proxy(payload, &sb);
     } else {
-        char url[512];
-        snprintf(url, sizeof(url), "https://api.search.brave.com%s", path);
-        err = search_direct(url, &sb);
+        err = search_direct(payload, &sb);
     }
+    free(payload);
 
     if (err != ESP_OK) {
         free(sb.data);
-        snprintf(output, output_size, "Error: Search request failed");
+        snprintf(output, output_size, "Error: Tavily Search request failed");
         return err;
     }
 
