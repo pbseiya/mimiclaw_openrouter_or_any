@@ -66,7 +66,18 @@
 #define MIMI_LLM_PROVIDER_DEFAULT    "anthropic"
 #define MIMI_LLM_MAX_TOKENS          4096
 #define MIMI_LLM_API_URL             "https://api.anthropic.com/v1/messages"
+#ifndef MIMI_OPENAI_API_URL
 #define MIMI_OPENAI_API_URL          "https://api.openai.com/v1/chat/completions"
+#endif
+
+#ifndef MIMI_OPENAI_API_HOST
+#define MIMI_OPENAI_API_HOST         "api.openai.com"
+#endif
+
+#ifndef MIMI_OPENAI_API_PATH
+#define MIMI_OPENAI_API_PATH         "/v1/chat/completions"
+#endif
+
 #define MIMI_LLM_API_VERSION         "2023-06-01"
 #define MIMI_LLM_STREAM_BUF_SIZE     (32 * 1024)
 #define MIMI_LLM_LOG_VERBOSE_PAYLOAD 0
