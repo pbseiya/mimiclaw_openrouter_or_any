@@ -27,6 +27,14 @@ MimiClaw 把一块小小的 ESP32-S3 开发板变成你的私人 AI 助理。插
 - **能干** — USB 供电，0.5W，24/7 运行
 - **可爱** — 一块 ESP32-S3 开发板，$5，没了
 
+## 自定义增强功能 (本地设置)
+
+此分支包含多项增强功能，使 MimiClaw 更易于使用且更灵活：
+- **OpenRouter 支持**: 已完全修复以适配 OpenRouter 的 API 端点。
+- **环境密钥管理**: 在 `.env` 文件中安全管理您的凭据。
+- **自动化脚本**: 使用 `./build_and_flash.sh` 一键同步密钥、构建和烧录。
+- **自定义文档**: 详细的本地指南请参阅 [README_INSTALL.md](README_INSTALL.md)。
+
 ## 工作原理
 
 ![](assets/mimiclaw.png)

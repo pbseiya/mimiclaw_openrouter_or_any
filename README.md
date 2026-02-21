@@ -27,6 +27,14 @@ MimiClaw turns a tiny ESP32-S3 board into a personal AI assistant. Plug it into 
 - **Energetic** — USB power, 0.5 W, runs 24/7
 - **Lovable** — One ESP32-S3 board, $5, nothing else
 
+## Custom Enhancements (Local Setup)
+
+This fork includes several enhancements to make MimiClaw easier to use and more flexible:
+- **OpenRouter Support**: Fully patched to work with OpenRouter's API endpoint.
+- **Environment Secrets**: Manage your credentials securely in a `.env` file.
+- **Automation Script**: Use `./build_and_flash.sh` to sync secrets, build, and flash in one command.
+- **Custom Documentation**: Detailed local guide in [README_INSTALL.md](README_INSTALL.md).
+
 ## How It Works
 
 ![](assets/mimiclaw.png)
